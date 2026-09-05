@@ -1,0 +1,71 @@
+name: Fully Automatic Anime Reel Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */2 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: anime-reel-bot
+  cancel-in-progress: false
+
+jobs:
+  post-reel:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run automatic anime Reel bot
+        env:
+          # AniList discovery. Every listed genre must match.
+          ANIME_GENRES: "Action,Fantasy"
+          MIN_SCORE: "70"
+          ANIME_RESULTS: "30"
+
+          # Reel length.
+          CLIP_MIN_SECONDS: "15"
+          CLIP_MAX_SECONDS: "45"
+
+          # One successful post per scheduled run.
+          POST_ONE_PER_RUN: "true"
+
+          # GitHub release is used as temporary public hosting for the MP4.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RELEASE_TAG: "anime-reel-host"
+
+          # Instagram Graph API.
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          GRAPH_API_VERSION: "v23.0"
+          INSTAGRAM_CAPTION: "#anime #animeclips #animeedit #reels #animereels"
+        run: python post_reel.py
+
+      - name: Commit posted.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add posted.json
+          git diff --cached --quiet || git commit -m "Update posted anime IDs"
+          git push
